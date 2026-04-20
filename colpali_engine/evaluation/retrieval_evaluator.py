@@ -70,7 +70,7 @@ class RetrievalEvaluator:
     def build_model_and_processor(self):
         model_name = self.model_name.lower()
 
-        if "colqwen" or "RegionRet" in model_name:
+        if "colqwen" in model_name or "regionret" in model_name:
             print(f"Loading ColQwen2.5-VL model from {self.model_name}")
             model = ColQwen2_5.from_pretrained(
                 self.model_name,
