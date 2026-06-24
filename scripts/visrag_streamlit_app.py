@@ -44,6 +44,14 @@ def _to_dataset_dict(ds: Dataset | DatasetDict) -> DatasetDict:
     return DatasetDict({"train": ds})
 
 
+@st.cache_data(show_spinner=False)
+def list_dataset_configs(dataset_ref: str) -> list[str]:
+    try:
+        return get_dataset_config_names(dataset_ref)
+    except Exception:
+        return []
+
+
 def _fallback_load_local(path: str) -> DatasetDict:
     base = Path(path)
     parquet_files = [str(p) for p in base.rglob("*.parquet")]
@@ -64,7 +72,11 @@ def _fallback_load_local(path: str) -> DatasetDict:
 
 
 @st.cache_data(show_spinner=False)
-def load_hf_dataset(repo_id: str) -> DatasetDict:
+def load_hf_dataset(repo_id: str, config_name: str | None = None) -> DatasetDict:
+    if config_name:
+        ds = load_dataset(repo_id, config_name)
+        return _to_dataset_dict(ds)
+
     try:
         ds = load_dataset(repo_id)
         return _to_dataset_dict(ds)
@@ -85,7 +97,11 @@ def load_hf_dataset(repo_id: str) -> DatasetDict:
 
 
 @st.cache_data(show_spinner=False)
-def load_local_dataset(path: str) -> DatasetDict:
+def load_local_dataset(path: str, config_name: str | None = None) -> DatasetDict:
+    if config_name:
+        ds = load_dataset(path, config_name)
+        return _to_dataset_dict(ds)
+
     try:
         ds = load_dataset(path)
         return _to_dataset_dict(ds)
@@ -221,10 +237,14 @@ def main() -> None:
     if source_type == "HuggingFace":
         repo_label = st.selectbox("Dataset", list(VISRAG_EVAL_REPOS.keys()), index=0)
         repo_id = VISRAG_EVAL_REPOS[repo_label]
+        hf_configs = list_dataset_configs(repo_id)
+        config_options = ["auto"] + hf_configs if hf_configs else ["auto"]
+        selected_config = st.selectbox("Config", config_options, index=0)
+        picked_config = None if selected_config == "auto" else selected_config
 
         if st.button("Load dataset", type="primary"):
             with st.spinner(f"Loading {repo_id} ..."):
-                ds_dict = load_hf_dataset(repo_id)
+                ds_dict = load_hf_dataset(repo_id, picked_config)
                 st.session_state["loaded_ds"] = ds_dict
                 st.session_state["loaded_base_dir"] = None
                 st.session_state["loaded_name"] = repo_id
@@ -240,9 +260,14 @@ def main() -> None:
                 help="Path to one dataset folder, e.g. data/VisRAG/VisRAG-Ret-Test-ArxivQA",
             )
 
+        local_configs = list_dataset_configs(selected_path)
+        local_config_options = ["auto"] + local_configs if local_configs else ["auto"]
+        selected_local_config = st.selectbox("Local config", local_config_options, index=0)
+        picked_local_config = None if selected_local_config == "auto" else selected_local_config
+
         if st.button("Load dataset", type="primary"):
             with st.spinner(f"Loading local dataset from {selected_path} ..."):
-                ds_dict = load_local_dataset(selected_path)
+                ds_dict = load_local_dataset(selected_path, picked_local_config)
                 st.session_state["loaded_ds"] = ds_dict
                 st.session_state["loaded_base_dir"] = selected_path
                 st.session_state["loaded_name"] = selected_path
