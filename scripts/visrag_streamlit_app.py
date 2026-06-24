@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import streamlit as st
-from datasets import Dataset, DatasetDict, load_dataset
+from datasets import Dataset, DatasetDict, get_dataset_config_names, load_dataset
 from PIL import Image, ImageDraw
 
 VISRAG_EVAL_REPOS = {
@@ -65,8 +65,23 @@ def _fallback_load_local(path: str) -> DatasetDict:
 
 @st.cache_data(show_spinner=False)
 def load_hf_dataset(repo_id: str) -> DatasetDict:
-    ds = load_dataset(repo_id)
-    return _to_dataset_dict(ds)
+    try:
+        ds = load_dataset(repo_id)
+        return _to_dataset_dict(ds)
+    except ValueError as exc:
+        if "Config name is missing" not in str(exc):
+            raise
+
+        config_names = get_dataset_config_names(repo_id)
+        merged = DatasetDict()
+        for config_name in config_names:
+            config_ds = load_dataset(repo_id, config_name)
+            if isinstance(config_ds, DatasetDict):
+                for split_name, split_ds in config_ds.items():
+                    merged[f"{config_name}/{split_name}"] = split_ds
+            else:
+                merged[config_name] = config_ds
+        return merged
 
 
 @st.cache_data(show_spinner=False)
@@ -75,6 +90,21 @@ def load_local_dataset(path: str) -> DatasetDict:
         ds = load_dataset(path)
         return _to_dataset_dict(ds)
     except Exception:
+        try:
+            config_names = get_dataset_config_names(path)
+            merged = DatasetDict()
+            for config_name in config_names:
+                config_ds = load_dataset(path, config_name)
+                if isinstance(config_ds, DatasetDict):
+                    for split_name, split_ds in config_ds.items():
+                        merged[f"{config_name}/{split_name}"] = split_ds
+                else:
+                    merged[config_name] = config_ds
+            if len(merged) > 0:
+                return merged
+        except Exception:
+            pass
+
         return _fallback_load_local(path)
 
 

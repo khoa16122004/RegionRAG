@@ -327,7 +327,17 @@ class RetrievalEvaluator:
                 return query_ids, queries
             
 
-        dataset = load_dataset(self.dataset_path, split="test")
+        try:
+            dataset = load_dataset(self.dataset_path, split="test")
+        except ValueError as exc:
+            if "Config name is missing" in str(exc):
+                print(
+                    "Dataset requires explicit config names (corpus/queries/qrels). "
+                    "Falling back to BEIR-style loader."
+                )
+                return self.build_visrag_dataloader()
+            raise
+
         dataset = dataset.filter(lambda x: x["query"] is not None)
         if "questionId" not in dataset.column_names:
             query_ids = [str(i) for i in range(len(dataset))]
